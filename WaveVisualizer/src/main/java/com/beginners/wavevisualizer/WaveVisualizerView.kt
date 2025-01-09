@@ -5,10 +5,15 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.media.AudioFormat
+import android.media.AudioRecord
 import android.util.AttributeSet
 import android.view.View
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
-class WaveVisualizerView(context: Context, attrs: AttributeSet) : View(context, attrs) {
+class WaveVisualizer(context: Context, attrs: AttributeSet) : View(context, attrs) {
     var barColor: Int = Color.parseColor("#3C3C3C")
     private val paint: Paint = Paint()
     private var data = mutableListOf<Float>()
@@ -18,10 +23,37 @@ class WaveVisualizerView(context: Context, attrs: AttributeSet) : View(context, 
     var offSet = 15F
     private val defaultAmp = 30F
 
+    private val bufferSize = AudioRecord.getMinBufferSize(
+        44100,
+        AudioFormat.CHANNEL_IN_MONO,
+        AudioFormat.ENCODING_PCM_16BIT
+    )
+
     init {
 
         paint.color = barColor
         clearData()
+    }
+
+    fun startRecorder(audioRecorder: AudioRecord) {
+        Thread {
+            val buffer = ShortArray(bufferSize)
+
+            try {
+                while (audioRecorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                    val readSize = audioRecorder.read(buffer, 0, buffer.size)
+                    if (readSize > 0) {
+                        val amplitude = calculateAmplitude(buffer)
+                        CoroutineScope(Dispatchers.Main).launch {
+                            addData(amplitude)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }.start()
+
     }
 
     fun clearData() {
